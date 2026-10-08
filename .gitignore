@@ -1,1 +1,8 @@
 VITURE_XR_Glasses_SDK_*
+build/
+out/
+.vs/
+bin/
+*.user
+CMakeSettings.json
+CMakeUserPresets.json
