@@ -7,7 +7,7 @@ namespace {
 const char* SHADER_SOURCE = R"(
 cbuffer MatrixBuffer : register(b0)
 {
-    matrix world_view_projection;
+    row_major matrix world_view_projection;
 };
 
 struct VS_INPUT
@@ -53,11 +53,14 @@ bool D3D11Renderer::initialize(HWND hwnd, uint32_t width, uint32_t height) {
     if (!create_render_target()) return false;
     if (!init_shaders_and_pipeline()) return false;
     if (!create_sampler()) return false;
+    if (!create_rasterizer_states()) return false;
 
     return true;
 }
 
 void D3D11Renderer::shutdown() {
+    wireframe_rasterizer_state_.Reset();
+    rasterizer_state_.Reset();
     keyed_mutex_.Reset();
     texture_srv_.Reset();
     imported_texture_.Reset();
@@ -205,7 +208,8 @@ bool D3D11Renderer::init_shaders_and_pipeline() {
 
 bool D3D11Renderer::create_sampler() {
     D3D11_SAMPLER_DESC samp_desc{};
-    samp_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    samp_desc.Filter = D3D11_FILTER_ANISOTROPIC;
+    samp_desc.MaxAnisotropy = 8;
     samp_desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;   // Toroidal wrapping along horizontal cylinder arc
     samp_desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;  // Vertical bounds clamp
     samp_desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
@@ -215,6 +219,26 @@ bool D3D11Renderer::create_sampler() {
 
     HRESULT hr = device_->CreateSamplerState(&samp_desc, &sampler_state_);
     return SUCCEEDED(hr);
+}
+
+bool D3D11Renderer::create_rasterizer_states() {
+    D3D11_RASTERIZER_DESC rd{};
+    rd.FillMode = D3D11_FILL_SOLID;
+    rd.CullMode = D3D11_CULL_BACK;
+    rd.FrontCounterClockwise = FALSE;
+    rd.DepthClipEnable = TRUE;
+
+    HRESULT hr = device_->CreateRasterizerState(&rd, &rasterizer_state_);
+    if (FAILED(hr)) return false;
+
+    rd.FillMode = D3D11_FILL_WIREFRAME;
+    rd.CullMode = D3D11_CULL_NONE;
+    hr = device_->CreateRasterizerState(&rd, &wireframe_rasterizer_state_);
+    return SUCCEEDED(hr);
+}
+
+void D3D11Renderer::set_wireframe(bool enabled) {
+    wireframe_mode_ = enabled;
 }
 
 bool D3D11Renderer::import_shared_texture(HANDLE shared_handle, const std::wstring& shared_name, bool use_keyed_mutex) {
@@ -310,6 +334,7 @@ void D3D11Renderer::render_frame(const math::Quaternion& camera_rot, float fov_y
     vp.MinDepth = 0.0f;
     vp.MaxDepth = 1.0f;
     context_->RSSetViewports(1, &vp);
+    context_->RSSetState(wireframe_mode_ ? wireframe_rasterizer_state_.Get() : rasterizer_state_.Get());
 
     ID3D11RenderTargetView* rtvs[] = {render_target_view_.Get()};
     context_->OMSetRenderTargets(1, rtvs, nullptr);

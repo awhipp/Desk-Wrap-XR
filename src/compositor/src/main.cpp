@@ -23,6 +23,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
         if (wparam == VK_SPACE) {
             g_viture.recenter();
             g_ipc.send_recenter(0.0f);
+        } else if (wparam == 'W' || wparam == 'w') {
+            g_renderer.set_wireframe(!g_renderer.is_wireframe());
         } else if (wparam == VK_ESCAPE) {
             PostQuitMessage(0);
         }

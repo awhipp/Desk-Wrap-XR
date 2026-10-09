@@ -1,6 +1,6 @@
 cbuffer MatrixBuffer : register(b0)
 {
-    matrix world_view_projection;
+    row_major matrix world_view_projection;
 };
 
 struct VS_INPUT

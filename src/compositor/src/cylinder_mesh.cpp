@@ -60,15 +60,15 @@ MeshData CylinderMeshGenerator::generate(const CylinderGeometry& geom) {
             uint32_t bot_left = (iv + 1) * stride + iu;
             uint32_t bot_right = bot_left + 1;
 
-            // First triangle (inward winding)
+            // First triangle (clockwise for inward viewer)
             mesh.indices.push_back(top_left);
-            mesh.indices.push_back(bot_left);
             mesh.indices.push_back(top_right);
+            mesh.indices.push_back(bot_left);
 
-            // Second triangle
+            // Second triangle (clockwise for inward viewer)
             mesh.indices.push_back(top_right);
-            mesh.indices.push_back(bot_left);
             mesh.indices.push_back(bot_right);
+            mesh.indices.push_back(bot_left);
         }
     }
 

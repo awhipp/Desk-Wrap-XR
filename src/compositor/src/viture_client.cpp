@@ -105,8 +105,8 @@ math::Quaternion VitureClient::get_camera_orientation() const {
     math::Quaternion raw_q(latest_pose_.qw, latest_pose_.qx, latest_pose_.qy, latest_pose_.qz);
     math::Quaternion d3d_q = math::nwu_to_d3d11_quaternion(raw_q);
 
-    // Apply software yaw offset around Up (+Y)
-    math::Quaternion yaw_offset = math::make_yaw_offset(yaw_offset_deg_);
+    // Apply software yaw offset around Up (+Y) to cancel offset angle
+    math::Quaternion yaw_offset = math::make_yaw_offset(-yaw_offset_deg_);
     return yaw_offset * d3d_q;
 }
 
