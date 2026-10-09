@@ -22,7 +22,8 @@ public:
     void set_yaw_offset(float offset_deg);
 
     PosePacket get_latest_pose() const;
-    math::Quaternion get_camera_orientation() const;
+    math::Quaternion get_camera_orientation(float lookahead_seconds = 0.0f) const;
+    math::Vector3 get_angular_velocity() const;
     bool is_streaming() const { return is_streaming_; }
 
 private:
@@ -35,6 +36,7 @@ private:
 
     mutable std::mutex pose_mutex_;
     PosePacket latest_pose_{};
+    math::Vector3 angular_velocity_{};
     float yaw_offset_deg_ = 0.0f;
 
     static VitureClient* s_instance_;

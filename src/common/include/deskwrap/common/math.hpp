@@ -93,4 +93,27 @@ Quaternion nwu_to_d3d11_quaternion(const Quaternion& q_nwu);
  */
 Quaternion make_yaw_offset(float yaw_offset_deg);
 
+/**
+ * @brief Normalizes a quaternion to unit length.
+ */
+inline Quaternion normalize_quaternion(const Quaternion& q) {
+    float mag = std::sqrt(q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z);
+    return mag > 1e-6f ? Quaternion(q.w / mag, q.x / mag, q.y / mag, q.z / mag) : Quaternion();
+}
+
+/**
+ * @brief Computes 3D angular velocity vector in rad/s from two consecutive orientation quaternions.
+ */
+Vector3 compute_angular_velocity(const Quaternion& q_prev, const Quaternion& q_curr, float dt_seconds);
+
+/**
+ * @brief Extrapolates orientation forward along constant angular velocity by lookahead interval.
+ */
+Quaternion predict_orientation(const Quaternion& current, const Vector3& angular_velocity, float lookahead_seconds);
+
+/**
+ * @brief Computes shortest geodesic angular difference in degrees between two quaternions.
+ */
+float quaternion_angular_distance_deg(const Quaternion& q1, const Quaternion& q2);
+
 } // namespace deskwrap::math

@@ -99,10 +99,16 @@ PosePacket VitureClient::get_latest_pose() const {
     return latest_pose_;
 }
 
-math::Quaternion VitureClient::get_camera_orientation() const {
+math::Quaternion VitureClient::get_camera_orientation(float lookahead_seconds) const {
     std::lock_guard<std::mutex> lock(pose_mutex_);
-    // Convert NWU quaternion to D3D11 Left-Handed
     math::Quaternion raw_q(latest_pose_.qw, latest_pose_.qx, latest_pose_.qy, latest_pose_.qz);
+
+    // Apply constant-velocity forward extrapolation if lookahead is requested
+    if (lookahead_seconds > 0.0f) {
+        raw_q = math::predict_orientation(raw_q, angular_velocity_, lookahead_seconds);
+    }
+
+    // Convert NWU quaternion to D3D11 Left-Handed
     math::Quaternion d3d_q = math::nwu_to_d3d11_quaternion(raw_q);
 
     // Apply software yaw offset around Up (+Y) to cancel offset angle
@@ -110,10 +116,40 @@ math::Quaternion VitureClient::get_camera_orientation() const {
     return yaw_offset * d3d_q;
 }
 
+math::Vector3 VitureClient::get_angular_velocity() const {
+    std::lock_guard<std::mutex> lock(pose_mutex_);
+    return angular_velocity_;
+}
+
 void VitureClient::on_pose_callback(float* data, uint64_t timestamp) {
     if (!s_instance_ || !data) return;
 
     std::lock_guard<std::mutex> lock(s_instance_->pose_mutex_);
+
+    // Compute angular velocity if timestamp has advanced
+    if (s_instance_->latest_pose_.timestamp_us > 0 && timestamp > s_instance_->latest_pose_.timestamp_us) {
+        uint64_t dt_us = timestamp - s_instance_->latest_pose_.timestamp_us;
+        if (dt_us < 50000) { // Valid interval under 50ms (filter out pauses)
+            float dt_sec = static_cast<float>(dt_us) / 1000000.0f;
+            math::Quaternion q_prev(
+                s_instance_->latest_pose_.qw,
+                s_instance_->latest_pose_.qx,
+                s_instance_->latest_pose_.qy,
+                s_instance_->latest_pose_.qz
+            );
+            math::Quaternion q_curr(data[3], data[4], data[5], data[6]);
+            math::Vector3 raw_omega = math::compute_angular_velocity(q_prev, q_curr, dt_sec);
+
+            // Exponential moving average filter (alpha = 0.40) to reject high-frequency IMU noise
+            constexpr float alpha = 0.40f;
+            s_instance_->angular_velocity_ = math::Vector3(
+                alpha * raw_omega.x + (1.0f - alpha) * s_instance_->angular_velocity_.x,
+                alpha * raw_omega.y + (1.0f - alpha) * s_instance_->angular_velocity_.y,
+                alpha * raw_omega.z + (1.0f - alpha) * s_instance_->angular_velocity_.z
+            );
+        }
+    }
+
     s_instance_->latest_pose_.timestamp_us = timestamp;
     s_instance_->latest_pose_.roll = data[0];
     s_instance_->latest_pose_.pitch = data[1];

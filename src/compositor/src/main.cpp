@@ -119,8 +119,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
 
         if (!running) break;
 
-        // Obtain camera orientation from latest VITURE IMU pose
-        deskwrap::math::Quaternion cam_rot = g_viture.get_camera_orientation();
+        // Obtain camera orientation from latest VITURE IMU pose with forward lookahead prediction
+        // 25.3ms lookahead for 60Hz mode (12.8ms for 120Hz mode) compensates pipeline latency
+        constexpr float PREDICTION_LOOKAHEAD_60HZ = 0.0253f;
+        deskwrap::math::Quaternion cam_rot = g_viture.get_camera_orientation(PREDICTION_LOOKAHEAD_60HZ);
 
         // 45 degree FOV vertical
         float fov_y = 45.0f * deskwrap::math::DEG_TO_RAD;

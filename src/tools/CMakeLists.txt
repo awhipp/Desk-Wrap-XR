@@ -38,3 +38,19 @@ target_link_libraries(prototype-cylinder-renderer
 )
 
 target_compile_features(prototype-cylinder-renderer PRIVATE cxx_std_20)
+
+add_executable(prototype-latency-budget
+    prototype_latency_budget.cpp
+)
+
+target_include_directories(prototype-latency-budget
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../common/include
+)
+
+target_link_libraries(prototype-latency-budget
+    PRIVATE
+        deskwrap-common
+)
+
+target_compile_features(prototype-latency-budget PRIVATE cxx_std_20)
