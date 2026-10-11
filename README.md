@@ -117,8 +117,16 @@ desk-wrap-xr/
   ```
 
   *(Note: `--includeRecommended` is required to ensure `cl.exe` (MSVC compiler) and the Windows SDK headers/libraries are installed).*
-* **CMake**: Version 3.24 or higher (`scoop install cmake`).
-* **Hardware SDK**: Bundled in `VITURE_XR_Glasses_SDK_for_Windows_x86_64/` (contains headers and x86_64 binaries).
+* **Hardware SDK (VITURE Windows SDK)**:
+  Due to licensing, the VITURE SDK binaries and headers are third-party proprietary assets and are excluded from source control via `.gitignore`.
+  Developers must download the Windows x86_64 SDK from the VITURE developer portal and unpack it into the repository root:
+  ```text
+  desk-wrap-xr/
+  └── VITURE_XR_Glasses_SDK_for_Windows_x86_64/
+      ├── include/      # viture_glasses_provider.h and SDK headers
+      └── x86_64/       # glasses.lib, glasses.dll, libusb-1.0.dll, carina_vio.dll, etc.
+  ```
+  *(Alternatively, point CMake to a custom location using `-DVITURE_SDK_DIR=<path>`)*.
 
 ### Building
 
@@ -131,13 +139,13 @@ cmake --build build --config Release
 
 All build artifacts and staged runtime DLLs (`glasses.dll`, `libusb-1.0.dll`, `carina_vio.dll`, `glew32.dll`, `opencv_world4100.dll`) are placed directly into `build/bin/Release/`.
 
-### Configuration
+### Configuration & User Settings
 
 Both executables load runtime settings from `%APPDATA%\DeskWrapXR\config.json`:
 
-* **Missing file**: Produces default settings, including a 180° cylindrical arc, 180°–360° bounds, prediction enabled, and monitor hardware ID `DISPLAY\VIT0120`.
-* **Malformed JSON**: Logs an error to `stderr` and falls back gracefully to defaults.
-* **Testing CLI options**: Both executables accept `--config <path>` to specify a custom file and `--validate-config` to verify config parsing and exit.
+* **Zero-Setup Defaults**: If no configuration file exists, the system automatically uses sensible defaults (180° cylindrical arc, 180°–360° adjustment range, head-tracking pose prediction enabled, and monitor hardware ID `DISPLAY\VIT0120`).
+* **Error Resilience**: If the configuration file contains malformed JSON or invalid types, an informative error is logged to `stderr` and the application safely falls back to defaults without crashing.
+* **Testing CLI Options**: Both executables support `--config <path>` to specify an alternative configuration file and `--validate-config` to verify settings and exit without starting background loops.
 
 ### Running Tests
 
