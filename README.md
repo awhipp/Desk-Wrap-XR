@@ -104,3 +104,57 @@ desk-wrap-xr/
 | Pointer Handling | `WH_MOUSE_LL` hook with `SetCursorPos` | `CGEventTap` with `CGWarpMouseCursorPosition` |
 | Compositor Backend | Direct3D 11 or Vulkan | Metal |
 | Orientation Input | `glasses.dll` (libusb) | `libglasses.dylib` (IOKit HID) |
+
+## Developer Guide
+
+### Prerequisites (Windows)
+
+* **Compiler & Toolchain**: Visual Studio 2022 (MSVC v143) with C++ Desktop tools and Windows SDK.
+  To install via `winget` in an elevated Administrator prompt:
+
+  ```powershell
+  winget install Microsoft.VisualStudio.2022.BuildTools --override "--passive --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+  ```
+
+  *(Note: `--includeRecommended` is required to ensure `cl.exe` (MSVC compiler) and the Windows SDK headers/libraries are installed).*
+* **CMake**: Version 3.24 or higher (`scoop install cmake`).
+* **Hardware SDK**: Bundled in `VITURE_XR_Glasses_SDK_for_Windows_x86_64/` (contains headers and x86_64 binaries).
+
+### Building
+
+Configure and build both `deskwrap-daemon` and `deskwrap-compositor` in one step:
+
+```cmd
+cmake -B build -S . -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release
+```
+
+All build artifacts and staged runtime DLLs (`glasses.dll`, `libusb-1.0.dll`, `carina_vio.dll`, `glew32.dll`, `opencv_world4100.dll`) are placed directly into `build/bin/Release/`.
+
+### Configuration
+
+Both executables load runtime settings from `%APPDATA%\DeskWrapXR\config.json`:
+
+* **Missing file**: Produces default settings, including a 180° cylindrical arc, 180°–360° bounds, prediction enabled, and monitor hardware ID `DISPLAY\VIT0120`.
+* **Malformed JSON**: Logs an error to `stderr` and falls back gracefully to defaults.
+* **Testing CLI options**: Both executables accept `--config <path>` to specify a custom file and `--validate-config` to verify config parsing and exit.
+
+### Running Tests
+
+Run the automated test suite via CTest:
+
+```cmd
+ctest --test-dir build -C Release --output-on-failure
+```
+
+### Implementation Roadmap & Vertical Slices
+
+1. **Ticket #14 (Current)**: Build foundation, CMake MSVC configuration, DLL staging, and config loading.
+2. **Ticket #15**: DXGI Desktop Duplication capture and shared D3D11 texture handle over IPC named pipe.
+3. **Ticket #16**: Cylinder projection on the glasses monitor (`DISPLAY\VIT0120`, 180°–360° arc).
+4. **Ticket #17**: Head tracking with constant-velocity pose prediction (VITURE SDK bypass mode, ~400 Hz IMU).
+5. **Ticket #18**: Virtual display driver integration and seamless mouse wrap (`WH_MOUSE_LL`).
+6. **Ticket #19**: Device lifecycle, dual-readiness debounce (USB + Monitor), auto-start, and crash recovery.
+7. **Ticket #20**: Global hotkeys (`Ctrl+Alt+R` recenter, `Ctrl+Alt+Plus/Minus` arc adjustment) and tray menu.
+8. **Ticket #21**: Automatic audio endpoint routing and restoration (`IMMDeviceEnumerator`).
+9. **Ticket #22**: Single Inno Setup installer packaging.
