@@ -297,7 +297,7 @@ ConfigLoadResult load_config(const std::filesystem::path& filepath) {
 
     if (!std::filesystem::exists(target_path)) {
         result.status = ConfigLoadStatus::FileNotFound;
-        result.message = "[Config] Configuration file '" + target_path.string() + 
+        result.message = "[Config] Configuration file '" + target_path.string() +
                          "' not found. Using default configuration (arc: 180.0°).";
         std::cout << result.message << "\n";
         return result;
@@ -306,7 +306,7 @@ ConfigLoadResult load_config(const std::filesystem::path& filepath) {
     std::ifstream file(target_path, std::ios::in | std::ios::binary);
     if (!file.is_open()) {
         result.status = ConfigLoadStatus::FileNotFound;
-        result.message = "[Config] Could not open configuration file '" + target_path.string() + 
+        result.message = "[Config] Could not open configuration file '" + target_path.string() +
                          "'. Using default configuration (arc: 180.0°).";
         std::cout << result.message << "\n";
         return result;
@@ -324,7 +324,7 @@ ConfigLoadResult load_config(const std::filesystem::path& filepath) {
         if (root.type != JsonValue::Type::Object && parse_error.empty()) {
             parse_error = "Root JSON element must be an object";
         }
-        result.message = "[Config] Error: Malformed JSON in configuration file '" + target_path.string() + 
+        result.message = "[Config] Error: Malformed JSON in configuration file '" + target_path.string() +
                          "': " + parse_error + ". Falling back to default configuration.";
         std::cerr << result.message << "\n";
         return result;
@@ -365,7 +365,7 @@ ConfigLoadResult load_config(const std::filesystem::path& filepath) {
     }
 
     result.status = ConfigLoadStatus::Success;
-    result.message = "[Config] Successfully loaded configuration from '" + target_path.string() + 
+    result.message = "[Config] Successfully loaded configuration from '" + target_path.string() +
                      "' (arc: " + std::to_string(result.config.arc_degrees) + "°).";
     std::cout << result.message << "\n";
 
@@ -408,7 +408,7 @@ bool save_config(const DeskWrapConfig& config, const std::filesystem::path& file
 
 void print_config(const DeskWrapConfig& config, std::ostream& os) {
     os << "DeskWrap Configuration:\n"
-       << "  Arc Degrees:             " << config.arc_degrees << "° (bounds: " 
+       << "  Arc Degrees:             " << config.arc_degrees << "° (bounds: "
        << config.min_arc_degrees << "° - " << config.max_arc_degrees << "°)\n"
        << "  Radius:                  " << config.radius << " m\n"
        << "  Height:                  " << config.height << " m\n"
