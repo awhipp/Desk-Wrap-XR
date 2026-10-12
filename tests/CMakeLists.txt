@@ -51,4 +51,3 @@ endif()
 target_compile_features(deskwrap-ipc-tests PRIVATE cxx_std_20)
 
 add_test(NAME ipc_tests COMMAND deskwrap-ipc-tests)
-
