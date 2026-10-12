@@ -1,8 +1,12 @@
 cmake_minimum_required(VERSION 3.24)
 
 add_executable(deskwrap-compositor
+    src/monitor_finder.hpp
+    src/monitor_finder.cpp
     src/flat_renderer.hpp
     src/flat_renderer.cpp
+    src/cylinder_renderer.hpp
+    src/cylinder_renderer.cpp
     src/main.cpp
 )
 

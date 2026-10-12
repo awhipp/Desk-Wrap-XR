@@ -6,7 +6,8 @@
 #include <memory>
 #include "deskwrap/common/config.hpp"
 #include "deskwrap/common/ipc_channel.hpp"
-#include "flat_renderer.hpp"
+#include "cylinder_renderer.hpp"
+#include "monitor_finder.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -17,7 +18,7 @@
 
 namespace {
 
-deskwrap::compositor::FlatRenderer* g_renderer = nullptr;
+deskwrap::compositor::CylinderRenderer* g_renderer = nullptr;
 std::atomic<bool> g_connected{false};
 
 #ifdef _WIN32
@@ -28,6 +29,40 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param
         uint32_t h = HIWORD(l_param);
         if (g_renderer && w > 0 && h > 0) {
             g_renderer->resize(w, h);
+        }
+        return 0;
+    }
+    case WM_KEYDOWN: {
+        if (!g_renderer) return 0;
+        switch (w_param) {
+        case VK_LEFT:
+            g_renderer->adjust_camera_yaw(5.0f);
+            break;
+        case VK_RIGHT:
+            g_renderer->adjust_camera_yaw(-5.0f);
+            break;
+        case VK_UP:
+            g_renderer->adjust_camera_pitch(5.0f);
+            break;
+        case VK_DOWN:
+            g_renderer->adjust_camera_pitch(-5.0f);
+            break;
+        case 'R':
+            g_renderer->reset_camera();
+            break;
+        case VK_OEM_PLUS:
+        case VK_ADD:
+            g_renderer->update_geometry(g_renderer->get_arc_degrees() + 10.0f, 1.8f, 1.0f);
+            break;
+        case VK_OEM_MINUS:
+        case VK_SUBTRACT:
+            g_renderer->update_geometry(g_renderer->get_arc_degrees() - 10.0f, 1.8f, 1.0f);
+            break;
+        case VK_ESCAPE:
+            PostQuitMessage(0);
+            break;
+        default:
+            break;
         }
         return 0;
     }
@@ -45,6 +80,7 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param
 int main(int argc, char* argv[]) {
     std::filesystem::path config_path;
     bool validate_only = false;
+    bool preview_mode = false;
     std::wstring pipe_name = deskwrap::ipc::DEFAULT_PIPE_NAME;
 
     for (int i = 1; i < argc; ++i) {
@@ -56,6 +92,8 @@ int main(int argc, char* argv[]) {
         } else if (arg == "--pipe" && i + 1 < argc) {
             std::string p = argv[++i];
             pipe_name = std::wstring(p.begin(), p.end());
+        } else if (arg == "--preview" || arg == "--windowed") {
+            preview_mode = true;
         } else if (arg == "--help" || arg == "-h") {
             std::cout << "DeskWrap XR Compositor\n"
                       << "Usage: deskwrap-compositor [options]\n"
@@ -63,6 +101,7 @@ int main(int argc, char* argv[]) {
                       << "  --config <path>      Specify custom path to config.json\n"
                       << "  --validate-config    Validate config loading and exit\n"
                       << "  --pipe <name>        Named pipe name for IPC\n"
+                      << "  --preview, --windowed Run in windowed preview mode on primary display\n"
                       << "  --help, -h           Show this help message\n";
             return 0;
         }
@@ -81,9 +120,27 @@ int main(int argc, char* argv[]) {
 
     std::cout << "[Compositor] Compositor configured with cylinder arc: " << config.arc_degrees << "°.\n";
     std::cout << "[Compositor] Target Monitor HW ID: " << config.monitor_hardware_id << "\n";
+    std::cout << "[Compositor] Target Monitor EDID Name: " << config.monitor_edid_name << "\n";
     std::cout << "[Compositor] Pose Prediction: " << (config.pose_prediction_enabled ? "ON" : "OFF") << "\n";
 
 #ifdef _WIN32
+    // Search for the glasses monitor
+    auto mon_info = deskwrap::compositor::find_glasses_monitor(
+        config.monitor_hardware_id,
+        config.monitor_edid_name
+    );
+
+    if (!mon_info.found) {
+        if (!preview_mode) {
+            std::cerr << "[Compositor] Error: Glasses monitor is absent: hardware ID '"
+                      << config.monitor_hardware_id << "' (EDID: '"
+                      << config.monitor_edid_name << "') not detected. Exiting.\n";
+            return 1;
+        } else {
+            std::cout << "[Compositor] Glasses monitor absent. Running in preview/windowed mode on primary display as requested.\n";
+        }
+    }
+
     // Register Window Class
     const wchar_t* CLASS_NAME = L"DeskWrapCompositorWindowClass";
     WNDCLASSEXW wc{};
@@ -96,21 +153,51 @@ int main(int argc, char* argv[]) {
 
     RegisterClassExW(&wc);
 
-    uint32_t initial_w = 1280;
-    uint32_t initial_h = 720;
+    int win_x = 0;
+    int win_y = 0;
+    int win_w = 1280;
+    int win_h = 720;
+    DWORD window_style = 0;
+    DWORD window_ex_style = 0;
+    const wchar_t* window_title = L"DeskWrap XR Compositor - Glasses Output";
 
-    RECT wr = {0, 0, static_cast<LONG>(initial_w), static_cast<LONG>(initial_h)};
-    AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
+    if (mon_info.found) {
+        // Open borderless fullscreen window on the glasses monitor without manual placement
+        win_x = mon_info.bounds.left;
+        win_y = mon_info.bounds.top;
+        win_w = mon_info.width;
+        win_h = mon_info.height;
+        window_style = WS_POPUP | WS_VISIBLE;
+        window_ex_style = WS_EX_APPWINDOW;
+
+        std::cout << "[Compositor] Found glasses monitor '" << mon_info.edid_name
+                  << "' (" << mon_info.hardware_id << ") on "
+                  << deskwrap::compositor::to_narrow_string(mon_info.adapter_name)
+                  << " at (" << win_x << ", " << win_y << ") with resolution "
+                  << win_w << "x" << win_h << ".\n";
+    } else {
+        // Preview windowed mode
+        win_w = 1280;
+        win_h = 720;
+        RECT wr = {0, 0, static_cast<LONG>(win_w), static_cast<LONG>(win_h)};
+        AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
+        win_x = CW_USEDEFAULT;
+        win_y = CW_USEDEFAULT;
+        win_w = wr.right - wr.left;
+        win_h = wr.bottom - wr.top;
+        window_style = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
+        window_title = L"DeskWrap XR Compositor - Preview Window";
+    }
 
     HWND hwnd = CreateWindowExW(
-        0,
+        window_ex_style,
         CLASS_NAME,
-        L"DeskWrap XR Compositor - Live Desktop Mirror",
-        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        wr.right - wr.left,
-        wr.bottom - wr.top,
+        window_title,
+        window_style,
+        win_x,
+        win_y,
+        win_w,
+        win_h,
         nullptr,
         nullptr,
         GetModuleHandleW(nullptr),
@@ -118,15 +205,23 @@ int main(int argc, char* argv[]) {
     );
 
     if (!hwnd) {
-        std::cerr << "[Compositor] Failed to create preview window.\n";
+        std::cerr << "[Compositor] Failed to create compositor window.\n";
         return 1;
     }
 
-    deskwrap::compositor::FlatRenderer renderer;
+    if (mon_info.found) {
+        SetWindowPos(hwnd, HWND_TOP, win_x, win_y, win_w, win_h, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+        std::cout << "[Compositor] Opened fullscreen window on glasses monitor without manual placement.\n";
+    }
+
+    deskwrap::compositor::CylinderRenderer renderer;
     g_renderer = &renderer;
 
-    if (!renderer.initialize(hwnd, initial_w, initial_h)) {
-        std::cerr << "[Compositor] Failed to initialize Direct3D 11 renderer.\n";
+    uint32_t render_w = (mon_info.found) ? static_cast<uint32_t>(mon_info.width) : 1280;
+    uint32_t render_h = (mon_info.found) ? static_cast<uint32_t>(mon_info.height) : 720;
+
+    if (!renderer.initialize(hwnd, render_w, render_h, config)) {
+        std::cerr << "[Compositor] Failed to initialize Direct3D 11 cylinder renderer.\n";
         return 1;
     }
 
@@ -153,7 +248,7 @@ int main(int argc, char* argv[]) {
         g_connected = false;
     });
 
-    std::cout << "[Compositor] Window created and renderer active. Connecting to daemon...\n";
+    std::cout << "[Compositor] Window created and cylinder renderer active. Connecting to daemon...\n";
 
     auto last_reconnect_attempt = std::chrono::steady_clock::now() - std::chrono::seconds(1);
     bool running = true;

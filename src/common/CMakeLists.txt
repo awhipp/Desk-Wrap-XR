@@ -5,8 +5,10 @@ add_library(deskwrap-common STATIC
     include/deskwrap/common/config.hpp
     include/deskwrap/common/ipc_protocol.hpp
     include/deskwrap/common/ipc_channel.hpp
+    include/deskwrap/common/cylinder_mesh.hpp
     src/config.cpp
     src/ipc_channel.cpp
+    src/cylinder_mesh.cpp
 )
 
 target_include_directories(deskwrap-common
