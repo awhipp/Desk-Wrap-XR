@@ -13,6 +13,7 @@ namespace deskwrap::compositor {
  */
 struct GlassesMonitorInfo {
     bool found = false;
+    bool is_duplicate_mode = false;
     std::wstring adapter_name;
     std::string hardware_id;
     std::string edid_name;
@@ -32,6 +33,11 @@ bool is_glasses_monitor_match(
     const std::string& target_hardware_id = "DISPLAY\\VIT0120",
     const std::string& target_edid_name = "VITURE Beast"
 );
+
+/**
+ * @brief Checks if the discovered glasses monitor is running in Duplicate (mirrored) mode.
+ */
+bool is_glasses_duplicate_mode(const GlassesMonitorInfo& info);
 
 /**
  * @brief Enumerates attached display monitors to locate the VITURE glasses monitor.

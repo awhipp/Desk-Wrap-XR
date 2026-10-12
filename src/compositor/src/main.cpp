@@ -139,6 +139,16 @@ int main(int argc, char* argv[]) {
         } else {
             std::cout << "[Compositor] Glasses monitor absent. Running in preview/windowed mode on primary display as requested.\n";
         }
+    } else {
+        if (preview_mode) {
+            std::cout << "[Compositor] Glasses monitor detected, but running in preview/windowed mode on primary display as requested (--preview).\n";
+        } else if (deskwrap::compositor::is_glasses_duplicate_mode(mon_info)) {
+            std::cerr << "[Compositor] Error: Glasses monitor is in Duplicate (mirrored) mode on "
+                      << deskwrap::compositor::to_narrow_string(mon_info.adapter_name) << " at (0, 0).\n"
+                      << "             DeskWrap XR requires an Extended desktop to project onto the glasses without occluding the captured desktop.\n"
+                      << "             Please press Win + P and select 'Extend'. Exiting.\n";
+            return 1;
+        }
     }
 
     // Register Window Class
@@ -153,6 +163,8 @@ int main(int argc, char* argv[]) {
 
     RegisterClassExW(&wc);
 
+    bool use_fullscreen_glasses = mon_info.found && !preview_mode;
+
     int win_x = 0;
     int win_y = 0;
     int win_w = 1280;
@@ -161,7 +173,7 @@ int main(int argc, char* argv[]) {
     DWORD window_ex_style = 0;
     const wchar_t* window_title = L"DeskWrap XR Compositor - Glasses Output";
 
-    if (mon_info.found) {
+    if (use_fullscreen_glasses) {
         // Open borderless fullscreen window on the glasses monitor without manual placement
         win_x = mon_info.bounds.left;
         win_y = mon_info.bounds.top;
@@ -209,7 +221,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    if (mon_info.found) {
+    if (use_fullscreen_glasses) {
         SetWindowPos(hwnd, HWND_TOP, win_x, win_y, win_w, win_h, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
         std::cout << "[Compositor] Opened fullscreen window on glasses monitor without manual placement.\n";
     }
@@ -217,8 +229,8 @@ int main(int argc, char* argv[]) {
     deskwrap::compositor::CylinderRenderer renderer;
     g_renderer = &renderer;
 
-    uint32_t render_w = (mon_info.found) ? static_cast<uint32_t>(mon_info.width) : 1280;
-    uint32_t render_h = (mon_info.found) ? static_cast<uint32_t>(mon_info.height) : 720;
+    uint32_t render_w = (use_fullscreen_glasses) ? static_cast<uint32_t>(mon_info.width) : 1280;
+    uint32_t render_h = (use_fullscreen_glasses) ? static_cast<uint32_t>(mon_info.height) : 720;
 
     if (!renderer.initialize(hwnd, render_w, render_h, config)) {
         std::cerr << "[Compositor] Failed to initialize Direct3D 11 cylinder renderer.\n";

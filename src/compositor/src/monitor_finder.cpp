@@ -82,8 +82,11 @@ BOOL CALLBACK enum_mon_proc(HMONITOR hMon, HDC, LPRECT, LPARAM lParam) {
     DISPLAY_DEVICEW dd{};
     dd.cb = sizeof(dd);
     DWORD dev_idx = 0;
+    int monitor_count_on_adapter = 0;
+    bool found_target_on_this_adapter = false;
 
     while (EnumDisplayDevicesW(mi.szDevice, dev_idx, &dd, 1 /* EDID_NAME */)) {
+        monitor_count_on_adapter++;
         std::string s_id = to_narrow_string(dd.DeviceID);
         std::string s_str = to_narrow_string(dd.DeviceString);
 
@@ -95,14 +98,35 @@ BOOL CALLBACK enum_mon_proc(HMONITOR hMon, HDC, LPRECT, LPARAM lParam) {
             ctx->result.bounds = mi.rcMonitor;
             ctx->result.width = mi.rcMonitor.right - mi.rcMonitor.left;
             ctx->result.height = mi.rcMonitor.bottom - mi.rcMonitor.top;
-            return FALSE; // Stop enumeration once found
+            found_target_on_this_adapter = true;
         }
         dev_idx++;
+    }
+
+    if (found_target_on_this_adapter) {
+        if (monitor_count_on_adapter > 1 || GetSystemMetrics(SM_CMONITORS) <= 1 ||
+            (ctx->result.adapter_name == L"\\\\.\\DISPLAY1" && ctx->result.bounds.left == 0 && ctx->result.bounds.top == 0 && GetSystemMetrics(SM_CMONITORS) <= 1)) {
+            ctx->result.is_duplicate_mode = true;
+        }
+        return FALSE; // Stop enumeration once found
     }
     return TRUE;
 }
 
 } // namespace
+
+bool is_glasses_duplicate_mode(const GlassesMonitorInfo& info) {
+    if (!info.found) return false;
+    if (info.is_duplicate_mode) return true;
+#ifdef _WIN32
+    if (info.adapter_name == L"\\\\.\\DISPLAY1" && info.bounds.left == 0 && info.bounds.top == 0) {
+        if (GetSystemMetrics(SM_CMONITORS) <= 1) {
+            return true;
+        }
+    }
+#endif
+    return false;
+}
 
 GlassesMonitorInfo find_glasses_monitor(
     const std::string& target_hardware_id,
@@ -140,6 +164,9 @@ GlassesMonitorInfo find_glasses_monitor(
                         ctx.result.bounds.bottom = dm.dmPosition.y + dm.dmPelsHeight;
                         ctx.result.width = dm.dmPelsWidth;
                         ctx.result.height = dm.dmPelsHeight;
+                        if (ctx.result.adapter_name == L"\\\\.\\DISPLAY1" && ctx.result.bounds.left == 0 && ctx.result.bounds.top == 0 && GetSystemMetrics(SM_CMONITORS) <= 1) {
+                            ctx.result.is_duplicate_mode = true;
+                        }
                         return ctx.result;
                     }
                 }
@@ -153,6 +180,10 @@ GlassesMonitorInfo find_glasses_monitor(
 }
 
 #else
+
+bool is_glasses_duplicate_mode(const GlassesMonitorInfo&) {
+    return false;
+}
 
 GlassesMonitorInfo find_glasses_monitor(const std::string&, const std::string&) {
     return GlassesMonitorInfo{};

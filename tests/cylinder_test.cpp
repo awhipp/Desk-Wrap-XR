@@ -161,6 +161,38 @@ void test_monitor_matching() {
     std::cout << "[TEST] test_monitor_matching PASSED.\n\n";
 }
 
+void test_monitor_duplicate_detection() {
+    std::cout << "[TEST] Running test_monitor_duplicate_detection...\n";
+
+    deskwrap::compositor::GlassesMonitorInfo dup_info{};
+    dup_info.found = true;
+    dup_info.is_duplicate_mode = true;
+    dup_info.adapter_name = L"\\\\.\\DISPLAY1";
+    dup_info.bounds = {0, 0, 1920, 1200};
+    dup_info.width = 1920;
+    dup_info.height = 1200;
+
+    // Must be recognized as duplicate mode
+    TEST_CHECK(deskwrap::compositor::is_glasses_duplicate_mode(dup_info));
+
+    deskwrap::compositor::GlassesMonitorInfo ext_info{};
+    ext_info.found = true;
+    ext_info.is_duplicate_mode = false;
+    ext_info.adapter_name = L"\\\\.\\DISPLAY2";
+    ext_info.bounds = {2880, 0, 4800, 1200};
+    ext_info.width = 1920;
+    ext_info.height = 1200;
+
+    // Extended monitor on DISPLAY2 must NOT be recognized as duplicate mode
+    TEST_CHECK(!deskwrap::compositor::is_glasses_duplicate_mode(ext_info));
+
+    deskwrap::compositor::GlassesMonitorInfo not_found_info{};
+    not_found_info.found = false;
+    TEST_CHECK(!deskwrap::compositor::is_glasses_duplicate_mode(not_found_info));
+
+    std::cout << "[TEST] test_monitor_duplicate_detection PASSED.\n\n";
+}
+
 void test_glasses_monitor_detection_on_current_machine() {
     std::cout << "[TEST] Running test_glasses_monitor_detection_on_current_machine...\n";
 
@@ -168,6 +200,11 @@ void test_glasses_monitor_detection_on_current_machine() {
     auto info = deskwrap::compositor::find_glasses_monitor("DISPLAY\\VIT0120", "VITURE Beast");
     // Verify it handles absence gracefully without crashing
     std::cout << "[TEST] Glasses monitor present: " << (info.found ? "YES" : "NO") << "\n";
+    if (info.found) {
+        std::cout << "[TEST] Detected on adapter: " << deskwrap::compositor::to_narrow_string(info.adapter_name)
+                  << " at (" << info.bounds.left << ", " << info.bounds.top << ")\n";
+        std::cout << "[TEST] Duplicate mode flag: " << (info.is_duplicate_mode ? "YES" : "NO") << "\n";
+    }
 
     std::cout << "[TEST] test_glasses_monitor_detection_on_current_machine PASSED.\n\n";
 }
@@ -180,6 +217,7 @@ int main() {
     test_cylinder_mesh_360_wrap_and_seamlessness();
     test_projection_matrix();
     test_monitor_matching();
+    test_monitor_duplicate_detection();
     test_glasses_monitor_detection_on_current_machine();
     std::cout << "All cylinder and monitor tests PASSED successfully!\n";
     return 0;

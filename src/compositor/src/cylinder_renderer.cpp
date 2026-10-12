@@ -406,14 +406,35 @@ bool CylinderRenderer::import_shared_texture(const ipc::SharedTexturePayload& pa
         imported_texture_.As(&keyed_mutex_);
     }
 
+    // Create local retained texture on compositor device to decouple continuous rendering from keyed mutex
+    D3D11_TEXTURE2D_DESC desc{};
+    desc.Width = payload.width;
+    desc.Height = payload.height;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = static_cast<DXGI_FORMAT>(payload.dxgi_format);
+    desc.SampleDesc.Count = 1;
+    desc.SampleDesc.Quality = 0;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    desc.CPUAccessFlags = 0;
+    desc.MiscFlags = 0;
+
+    hr = device_->CreateTexture2D(&desc, nullptr, &local_texture_);
+    if (FAILED(hr)) {
+        std::cerr << "[Renderer] Failed to create local retained texture: 0x" << std::hex << hr << std::dec << "\n";
+        return false;
+    }
+
     D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
     srv_desc.Format = static_cast<DXGI_FORMAT>(payload.dxgi_format);
     srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
     srv_desc.Texture2D.MipLevels = 1;
+    srv_desc.Texture2D.MostDetailedMip = 0;
 
-    hr = device_->CreateShaderResourceView(imported_texture_.Get(), &srv_desc, &texture_srv_);
+    hr = device_->CreateShaderResourceView(local_texture_.Get(), &srv_desc, &texture_srv_);
     if (FAILED(hr)) {
-        std::cerr << "[Renderer] Failed to create shader resource view for shared texture: 0x"
+        std::cerr << "[Renderer] Failed to create shader resource view for local texture: 0x"
                   << std::hex << hr << std::dec << "\n";
         return false;
     }
@@ -426,6 +447,7 @@ bool CylinderRenderer::import_shared_texture(const ipc::SharedTexturePayload& pa
 
 void CylinderRenderer::release_shared_texture() {
     texture_srv_.Reset();
+    local_texture_.Reset();
     keyed_mutex_.Reset();
     imported_texture_.Reset();
     has_frame_ = false;
@@ -460,52 +482,52 @@ void CylinderRenderer::render_frame() {
 
     context_->UpdateSubresource(camera_constant_buffer_.Get(), 0, nullptr, &view_proj, 0, 0);
 
-    if (imported_texture_ && texture_srv_) {
-        bool acquired = false;
+    // 1. Try to acquire new frame from shared texture into local retained texture
+    if (imported_texture_ && local_texture_) {
         if (keyed_mutex_) {
-            HRESULT hr = keyed_mutex_->AcquireSync(1, 16);
+            // Poll Key 1 with 0ms timeout (non-blocking)
+            HRESULT hr = keyed_mutex_->AcquireSync(1, 0);
             if (SUCCEEDED(hr)) {
-                acquired = true;
+                context_->CopyResource(local_texture_.Get(), imported_texture_.Get());
+                keyed_mutex_->ReleaseSync(0); // Immediately release to daemon
                 has_frame_ = true;
             }
         } else {
+            context_->CopyResource(local_texture_.Get(), imported_texture_.Get());
             has_frame_ = true;
         }
+    }
 
-        if (has_frame_ && vertex_buffer_ && index_buffer_) {
-            UINT stride = sizeof(CylinderVertex);
-            UINT offset = 0;
-            ID3D11Buffer* vbs[] = {vertex_buffer_.Get()};
-            context_->IASetVertexBuffers(0, 1, vbs, &stride, &offset);
-            context_->IASetIndexBuffer(index_buffer_.Get(), DXGI_FORMAT_R32_UINT, 0);
-            context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-            context_->IASetInputLayout(input_layout_.Get());
+    // 2. Render continuously from local retained texture
+    if (has_frame_ && local_texture_ && texture_srv_ && vertex_buffer_ && index_buffer_) {
+        UINT stride = sizeof(CylinderVertex);
+        UINT offset = 0;
+        ID3D11Buffer* vbs[] = {vertex_buffer_.Get()};
+        context_->IASetVertexBuffers(0, 1, vbs, &stride, &offset);
+        context_->IASetIndexBuffer(index_buffer_.Get(), DXGI_FORMAT_R32_UINT, 0);
+        context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        context_->IASetInputLayout(input_layout_.Get());
 
-            context_->RSSetState(rasterizer_state_.Get());
+        context_->RSSetState(rasterizer_state_.Get());
 
-            context_->VSSetShader(vertex_shader_.Get(), nullptr, 0);
-            ID3D11Buffer* cbs[] = {camera_constant_buffer_.Get()};
-            context_->VSSetConstantBuffers(0, 1, cbs);
+        context_->VSSetShader(vertex_shader_.Get(), nullptr, 0);
+        ID3D11Buffer* cbs[] = {camera_constant_buffer_.Get()};
+        context_->VSSetConstantBuffers(0, 1, cbs);
 
-            context_->PSSetShader(pixel_shader_.Get(), nullptr, 0);
+        context_->PSSetShader(pixel_shader_.Get(), nullptr, 0);
 
-            ID3D11SamplerState* samplers[] = {
-                (arc_degrees_ >= 359.9f) ? sampler_state_wrap_.Get() : sampler_state_clamp_.Get()
-            };
-            context_->PSSetSamplers(0, 1, samplers);
+        ID3D11SamplerState* samplers[] = {
+            (arc_degrees_ >= 359.9f) ? sampler_state_wrap_.Get() : sampler_state_clamp_.Get()
+        };
+        context_->PSSetSamplers(0, 1, samplers);
 
-            ID3D11ShaderResourceView* srvs[] = {texture_srv_.Get()};
-            context_->PSSetShaderResources(0, 1, srvs);
+        ID3D11ShaderResourceView* srvs[] = {texture_srv_.Get()};
+        context_->PSSetShaderResources(0, 1, srvs);
 
-            context_->DrawIndexed(index_count_, 0, 0);
+        context_->DrawIndexed(index_count_, 0, 0);
 
-            ID3D11ShaderResourceView* null_srv[] = {nullptr};
-            context_->PSSetShaderResources(0, 1, null_srv);
-        }
-
-        if (acquired && keyed_mutex_) {
-            keyed_mutex_->ReleaseSync(0);
-        }
+        ID3D11ShaderResourceView* null_srv[] = {nullptr};
+        context_->PSSetShaderResources(0, 1, null_srv);
     }
 
     swap_chain_->Present(1, 0);

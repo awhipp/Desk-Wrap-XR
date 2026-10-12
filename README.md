@@ -120,12 +120,14 @@ desk-wrap-xr/
 * **Hardware SDK (VITURE Windows SDK)**:
   Due to licensing, the VITURE SDK binaries and headers are third-party proprietary assets and are excluded from source control via `.gitignore`.
   Developers must download the Windows x86_64 SDK from the VITURE developer portal and unpack it into the repository root:
+
   ```text
   desk-wrap-xr/
   └── VITURE_XR_Glasses_SDK_for_Windows_x86_64/
       ├── include/      # viture_glasses_provider.h and SDK headers
       └── x86_64/       # glasses.lib, glasses.dll, libusb-1.0.dll, carina_vio.dll, etc.
   ```
+
   *(Alternatively, point CMake to a custom location using `-DVITURE_SDK_DIR=<path>`)*.
 
 ### Building
@@ -154,6 +156,12 @@ Run the automated test suite via CTest:
 ```cmd
 ctest --test-dir build -C Release --output-on-failure
 ```
+
+### Hardware & Display Setup (VITURE Glasses)
+
+* **Extended Display Requirement**: Windows display topology must be configured to **"Extend these displays"** (press `Win + P` and select **Extend**). In "Duplicate" (mirrored) mode, the compositor's fullscreen window covers the primary display at `(0, 0)`, occluding the desktop captured by DXGI duplication and causing an occlusion blackout loop. The compositor actively detects duplicate topology and warns if not extended.
+* **Standard Display Mode**: Ensure the glasses are operating in standard DisplayPort mode (not onboard 3DoF / pinned / anchored mode), as DeskWrap XR manages spatial orientation, cylinder mapping, and head tracking directly.
+* **Preview Mode**: Running `deskwrap-compositor.exe --preview` launches a windowed 1280x720 preview on the primary display for desktop testing, regardless of whether glasses are connected.
 
 ### Implementation Roadmap & Vertical Slices
 

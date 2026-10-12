@@ -67,6 +67,7 @@ private:
 
     ComPtr<ID3D11Texture2D> imported_texture_;
     ComPtr<IDXGIKeyedMutex> keyed_mutex_;
+    ComPtr<ID3D11Texture2D> local_texture_;
     ComPtr<ID3D11ShaderResourceView> texture_srv_;
 
     uint32_t width_ = 1920;
