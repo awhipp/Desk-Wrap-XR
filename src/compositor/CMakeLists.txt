@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
 
 add_executable(deskwrap-compositor
+    src/flat_renderer.hpp
+    src/flat_renderer.cpp
     src/main.cpp
 )
 
@@ -21,6 +23,9 @@ if(WIN32)
             user32
             shell32
             ole32
+            d3d11
+            dxgi
+            d3dcompiler
     )
 endif()
 

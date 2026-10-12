@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
 
 add_executable(deskwrap-daemon
+    src/dxgi_capture.hpp
+    src/dxgi_capture.cpp
     src/main.cpp
 )
 
@@ -20,6 +22,8 @@ if(WIN32)
             user32
             shell32
             ole32
+            d3d11
+            dxgi
     )
 endif()
 

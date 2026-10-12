@@ -3,7 +3,10 @@ cmake_minimum_required(VERSION 3.24)
 add_library(deskwrap-common STATIC
     include/deskwrap/common/types.hpp
     include/deskwrap/common/config.hpp
+    include/deskwrap/common/ipc_protocol.hpp
+    include/deskwrap/common/ipc_channel.hpp
     src/config.cpp
+    src/ipc_channel.cpp
 )
 
 target_include_directories(deskwrap-common
